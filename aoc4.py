@@ -62,13 +62,12 @@ def check_mas(l):
         x = "".join(l[i : i + 3])
         if x == "MAS" or x == "SAM":
             return 1
-
     return 0
 
 
 result = 0
 
-# Check only diagonals this time
+# Check only diagonals this time for all possible 3x3 submatrices
 for i in range(0, mat.shape[0] - 2):
     for j in range(0, mat.shape[1] - 2):
         submat = mat[i : i + 3, j : j + 3]
