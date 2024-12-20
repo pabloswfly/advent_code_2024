@@ -55,22 +55,6 @@ def process_text(file):
     return np.array(mat), seq
 
 
-def up(i, j):
-    return i - 1, j
-
-
-def down(i, j):
-    return i + 1, j
-
-
-def left(i, j):
-    return i, j - 1
-
-
-def right(i, j):
-    return i, j + 1
-
-
 class Box:
     def __init__(self, pos, mat):
         self.pos = pos
@@ -86,7 +70,7 @@ class Box:
 
         elif self.mat[*new_pos] == "O":
             other_box = Box(new_pos, self.mat)
-            other_box.move(dirs[c](*new_pos), mark="O")
+            other_box.move(move(new_pos, dirs[c]), mark="O")
             self.moved = other_box.moved
             if self.moved:
                 self.pos = new_pos
@@ -98,24 +82,28 @@ class Box:
         self.mat[*self.pos] = char
 
 
+def move(pos, delta):
+    return (pos[0] + delta[0], pos[1] + delta[1])
+
+
 #################### TASK 1 ####################
 
 with open(file_path, "r") as file:
     # mat, seq = process_text(file.read())
     mat, seq = process_text(ex2)
 
-dirs = {"^": up, "v": down, "<": left, ">": right}
+dirs = {"^": (-1, 0), "v": (1, 0), "<": (0, -1), ">": (0, 1)}
 prev_pos = np.argwhere(mat == "@")[0]
 
 for c in seq:
 
-    pos = dirs[c](*prev_pos)
+    pos = move(prev_pos, dirs[c])
 
-    if mat[*pos] != "#":
-        if mat[*pos] == "O":
+    if mat[pos] != "#":
+        if mat[pos] == "O":
 
             box = Box(pos, mat)
-            box.move(dirs[c](*pos), mark=".")
+            box.move(move(pos, dirs[c]), mark=".")
             if not box.moved:
                 continue
 
@@ -132,8 +120,8 @@ print(result)
 #################### TASK 2 ####################
 
 with open(file_path, "r") as file:
-    # mat, seq = process_text(file.read())
-    mat, seq = process_text(ex2)
+    mat, seq = process_text(file.read())
+    # mat, seq = process_text(ex2)
 
 bigmat = np.zeros((mat.shape[0], mat.shape[1] * 2), dtype=str)
 
@@ -147,7 +135,6 @@ for i in range(mat.shape[0]):
 bigmat = np.array(bigmat)
 print(bigmat)
 
-dirs = {"^": up, "v": down, "<": left, ">": right}
 b_list = ["[", "]"]
 
 
@@ -168,91 +155,85 @@ def check_if_box(bigmat, pos):
 
 class BigBox:
     def __init__(self, pos_left, pos_right, mat):
-        self.pos_left = pos_left
-        self.pos_right = pos_right
+        self.left = pos_left
+        self.right = pos_right
         self.mat = mat
         self.moved = True
 
-    def move_up_down(self, c, mark):
-        new_left = dirs[c](*self.pos_left)
-        new_right = dirs[c](*self.pos_right)
-        cont = True
+    def check_up_down(self, c):
+        left, right = [move(p, dirs[c]) for p in [self.left, self.right]]
+        if any(self.mat[*p] == "#" for p in [left, right]):
+            return False
+        return True
 
-        if any(self.mat[*p] == "#" for p in [new_left, new_right]):
+    def move_up_down(self, c):
+        left, right = [move(p, dirs[c]) for p in [self.left, self.right]]
+
+        if any(self.mat[*p] == "#" for p in [left, right]):
             self.moved = False
         else:
-            other_boxes = [
-                check_if_box(bigmat, p) for p in [new_left, new_right]
-            ]
-            for other_box in other_boxes:
-                if isinstance(other_box, BigBox):
-                    other_box.move_up_down(c, mark=[".", "."])
-                    self.moved = other_box.moved
-                    if self.moved:
-                        self.update_mat(mark)
-                        self.pos_left, self.pos_right = new_left, new_right
-                        self.update_mat(b_list)
-                        cont = False
-            if cont:
-                self.update_mat(mark)
-                self.pos_left, self.pos_right = new_left, new_right
-                self.update_mat(b_list)
+            others = [check_if_box(bigmat, p) for p in [left, right]]
+            others = [b for b in others if isinstance(b, BigBox)]
+            if len(others) > 1 and others[0].is_equal(others[1]):
+                others = [others[0]]
+
+            print([(b.left, b.right) for b in others])
+            can_be_moved = all(b.check_up_down(c) for b in others)
+
+            if can_be_moved:
+                for other_box in others:
+                    other_box.move_up_down(c)
                 self.moved = True
+                self.update_mat(left, right)
+            else:
+                self.moved = False
 
-    def move_left_right(self, c, mark):
-        new_left = dirs[c](*self.pos_left)
-        new_right = dirs[c](*self.pos_right)
-        other_box = check_if_box(bigmat, dirs[c](*new_left))
+    def move_left_right(self, c):
+        left, right = [move(p, dirs[c]) for p in [self.left, self.right]]
 
-        if any(self.mat[*p] == "." for p in [new_left, new_right]):
-            self.update_mat(mark)
-            self.pos_left, self.pos_right = new_left, new_right
-            self.update_mat(b_list)
-            self.moved = True
+        new_pos = [p for p in [left, right] if bigmat[*p] not in ["[", "]"]]
+        if not new_pos:
+            if c == "<":
+                other_box = check_if_box(bigmat, move(left, dirs[c]))
+            else:
+                other_box = check_if_box(bigmat, move(right, dirs[c]))
 
-        elif isinstance(other_box, BigBox):
-            other_box.move_left_right(c, mark=b_list)
+            other_box.move_left_right(c)
             self.moved = other_box.moved
             if self.moved:
-                self.pos_left, self.pos_right = new_left, new_right
+                self.update_mat(left, right)
 
-        elif any(self.mat[*p] == "#" for p in [new_left, new_right]):
+        elif self.mat[*new_pos[0]] == ".":
+            self.update_mat(left, right)
+            self.moved = True
+
+        elif self.mat[*new_pos[0]] == "#":
             self.moved = False
 
-    def update_mat(self, chars):
-        self.mat[*self.pos_left] = chars[0]
-        self.mat[*self.pos_right] = chars[1]
+    def update_mat(self, left, right):
+        self.mat[*self.left], self.mat[*self.right] = [".", "."]
+        self.left, self.right = left, right
+        self.mat[*self.left], self.mat[*self.right] = ["[", "]"]
 
+    def is_equal(self, other):
+        return self.left == other.left and self.right == other.right
 
-ex3 = """##############
-##......##..##
-##..........##
-##....[][]@.##
-##....[]....##
-##..........##
-##############"""
-
-mat = []
-for line in ex3.split("\n"):
-    mat.append(list(line))
-bigmat = np.array(mat)
 
 prev_pos = np.argwhere(bigmat == "@")[0]
-seq = ["<", "v", "v", "<", "<", "^", "^", "<", "<", "^", "^"]
 
 for c in seq:
 
-    pos = dirs[c](*prev_pos)
-    print(c)
+    pos = move(prev_pos, dirs[c])
 
     if bigmat[*pos] != "#":
         box = check_if_box(bigmat, pos)
+        mark = [".", "."]
 
         if isinstance(box, BigBox):
             if c in ["<", ">"]:
-                box.move_left_right(c, mark=[".", "."])
-            elif c in ["^", "v"]:
-                box.move_up_down(c, mark=[".", "."])
+                box.move_left_right(c)
+            else:
+                box.move_up_down(c)
 
             if not box.moved:
                 continue
@@ -260,4 +241,8 @@ for c in seq:
         bigmat[*prev_pos] = "."
         bigmat[*pos] = "@"
         prev_pos = pos
-        print(bigmat)
+print(bigmat)
+
+boxes = np.argwhere(bigmat == "[")
+result = sum([b[0] * 100 + b[1] for b in boxes])
+print(result)
